@@ -1,0 +1,313 @@
+:root {
+  color-scheme: light;
+  --ink: #241f1a;
+  --muted: #6e655c;
+  --paper: #f7f3ea;
+  --red: #d84a3a;
+  --red-deep: #9d261c;
+  --mark-ok: #c4312a;
+  --mark-ng: #1e4e9c;
+  --line: rgba(36, 31, 26, 0.16);
+  font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Noto Sans JP", sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  color: var(--ink);
+  background: #cfc6b6;
+}
+
+button,
+select,
+input { font: inherit; }
+
+.sheet {
+  position: relative;
+  max-width: 40rem;
+  min-height: 100dvh;
+  margin: 0 auto;
+  padding: 1.6rem 1.3rem 3rem 4.4rem;
+  background-color: var(--paper);
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 2rem,
+    rgba(70, 110, 160, 0.14) 2rem,
+    rgba(70, 110, 160, 0.14) calc(2rem + 1px)
+  );
+  box-shadow: 0 0 0 1px rgba(40, 30, 20, 0.06), 0 18px 40px rgba(60, 40, 20, 0.12);
+}
+
+.sheet::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 2.7rem;
+  width: 2px;
+  background: #e15a4a;
+  pointer-events: none;
+}
+
+.mast { margin-bottom: 1.4rem; }
+
+.eyebrow {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+}
+
+h1 {
+  margin: 0.15rem 0 0;
+  font-size: 1.45rem;
+  font-weight: 700;
+}
+
+.label {
+  margin: 0;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+}
+
+.score-value {
+  margin: 0.25rem 0 0;
+  font-size: clamp(2.1rem, 8vw, 3.1rem);
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.meta,
+.hint {
+  margin: 0.35rem 0 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.panel { margin-bottom: 1.3rem; }
+
+.field { margin: 1rem 0; }
+
+.field label {
+  display: block;
+  margin-bottom: 0.4rem;
+  font-weight: 700;
+}
+
+output { font-variant-numeric: tabular-nums; }
+
+select,
+input[type="range"] { width: 100%; }
+
+select {
+  padding: 0.7rem 0.75rem;
+  color: var(--ink);
+  background: #fffdf8;
+  border: 1.5px solid #2a241e;
+  border-radius: 0.35rem;
+}
+
+input[type="range"] { accent-color: var(--red); }
+
+.message {
+  margin: 0 0 1rem;
+  padding: 0.7rem 0.85rem;
+  background: #fde8e4;
+  border: 1px solid var(--red);
+  border-radius: 0.35rem;
+}
+
+.btn {
+  display: block;
+  width: 100%;
+  margin-top: 0.75rem;
+  padding: 0.9rem 1rem;
+  border-radius: 999px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.btn-primary {
+  color: #fffdf8;
+  background: var(--red);
+  border: 1.5px solid var(--red-deep);
+  font-size: 1.12rem;
+  font-weight: 700;
+}
+
+.btn-primary:hover { background: var(--red-deep); }
+
+.btn-ghost {
+  color: var(--ink);
+  background: transparent;
+  border: 1.5px solid #2a241e;
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: wait;
+}
+
+.btn:focus-visible,
+.choice:focus-visible,
+select:focus-visible {
+  outline: 3px solid var(--red);
+  outline-offset: 2px;
+}
+
+.play-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: baseline;
+}
+
+.progress,
+.timer-label {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.timer-label { color: var(--red-deep); }
+
+.timer-track {
+  height: 0.5rem;
+  margin-top: 0.55rem;
+  overflow: hidden;
+  background: rgba(36, 31, 26, 0.1);
+  border-radius: 999px;
+}
+
+.timer-bar {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, #e15a4a, #8f1d14);
+  transform: scaleX(1);
+  transform-origin: left center;
+}
+
+.term {
+  margin: 1.15rem 0 1.2rem;
+  font-family: "Iowan Old Style", "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif;
+  font-size: clamp(1.8rem, 6vw, 2.6rem);
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.choices {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.choice {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  width: 100%;
+  padding: 0.95rem 1rem;
+  color: var(--ink);
+  text-align: left;
+  background: rgba(255, 252, 247, 0.94);
+  border: 1.5px solid #2a241e;
+  border-radius: 0.4rem;
+  line-height: 1.55;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.choice span { flex: 1; }
+
+.choice kbd {
+  flex: 0 0 auto;
+  padding: 0.05rem 0.4rem;
+  font-family: inherit;
+  font-size: 0.8rem;
+  border: 1px solid #2a241e;
+  border-radius: 0.2rem;
+}
+
+.choice:hover,
+.choice:active { background: #fff; }
+
+.play-hint { margin-top: 0.9rem; }
+
+.result-list {
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.result-item {
+  display: grid;
+  grid-template-columns: 4.2rem 1fr;
+  gap: 0.15rem 0.7rem;
+  padding: 0.85rem 0;
+  border-bottom: 1px dashed var(--line);
+}
+
+.badge {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+}
+
+.result-no {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+}
+
+.mark {
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.mark-ok { color: var(--mark-ok); }
+.mark-ng { color: var(--mark-ng); }
+
+.result-term {
+  margin: 0;
+  font-weight: 700;
+}
+
+.result-line {
+  margin: 0.2rem 0 0;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.session { margin-top: 1.4rem; }
+
+.session h3 {
+  margin: 0;
+  font-size: 0.98rem;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 520px) {
+  .sheet {
+    padding-left: 2.3rem;
+  }
+
+  .sheet::before { left: 0.85rem; }
+
+  .result-item { grid-template-columns: 3.4rem 1fr; }
+}

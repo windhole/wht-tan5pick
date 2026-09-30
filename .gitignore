@@ -50,6 +50,3 @@ __pycache__/
 *.swp
 *.swo
 *~
-
-# my own rules
-data/

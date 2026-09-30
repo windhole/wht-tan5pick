@@ -1,0 +1,8 @@
+{
+  "name": "wht-tan5pick",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}

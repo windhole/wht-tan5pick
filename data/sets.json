@@ -1,0 +1,12 @@
+[
+  {
+    "id": "it-basics",
+    "title": "IT基礎用語",
+    "file": "it-basics.txt"
+  },
+  {
+    "id": "business",
+    "title": "ビジネス用語",
+    "file": "business.txt"
+  }
+]
