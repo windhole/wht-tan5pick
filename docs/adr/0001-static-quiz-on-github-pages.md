@@ -1,7 +1,7 @@
 # 0001. GitHub Pages向けの静的クイズ構成
 
 Date: 2026-09-30
-Status: Accepted
+Status: Accepted（`data/` を gitignore から外す判断のみ ADR-0002 で取り消し）
 
 ## Context
 
@@ -14,10 +14,10 @@ Status: Accepted
 - Pages はディレクトリ一覧を返さないため、選択候補は `data/sets.json` に書く。
 - ハイスコア・制限時間・回答ログは `localStorage` に保存する。ログは追記し、容量超過時は古い記録から捨てる。
 - 1ゲームは10問。スコアは正解数（0〜10）。ハイスコアは問題セットごとで、同点なら制限時間が短い記録を残す。時間切れは不正解。
-- 問題ファイルを Pages に載せるため、`.gitignore` の `data/` 除外を外す。
+- 問題ファイルを Pages に載せるため、`.gitignore` の `data/` 除外を外す。この項目は ADR-0002 で取り消した。
 
 ## Consequences
 
-- 問題の追加はテキストファイルと `sets.json` の1行で足り、デプロイは git push のみになる。
+- 公開する問題の追加はテキストファイルと `sets.json` の更新で足りる。`data/` の扱い（gitignore に戻す）は ADR-0002。
 - ログとハイスコアはブラウザごとに分かれ、端末をまたいで共有されない。
 - 誤答を作るには、説明が異なるレコードが2件以上必要になる。
