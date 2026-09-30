@@ -1,0 +1,55 @@
+# src/templates/gitignore — grg が新規プロジェクトに書く .gitignore の元
+# このファイルを編集して make / make release すると反映されます。
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+credentials.json
+service-account*.json
+
+# Dependencies
+node_modules/
+bower_components/
+.pnp
+.pnp.js
+.venv/
+venv/
+ENV/
+vendor/
+
+# Build / test / cache
+dist/
+build/
+out/
+coverage/
+.cache/
+.turbo/
+.output/
+*.log
+*.tsbuildinfo
+.eslintcache
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+
+# Editor junk
+*.swp
+*.swo
+*~
+
+# my own rules
+data/
