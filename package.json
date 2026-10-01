@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test"
+    "dev": "bun run --hot src/server.ts",
+    "test": "bun test"
   }
 }

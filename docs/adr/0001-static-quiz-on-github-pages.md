@@ -1,7 +1,7 @@
 # 0001. GitHub Pages向けの静的クイズ構成
 
 Date: 2026-09-30
-Status: Accepted（`data/` を gitignore から外す判断のみ ADR-0002 で取り消し）
+Status: Accepted（`data/` の gitignore は ADR-0002、配信方式と実装言語は ADR-0003 で置き換え）
 
 ## Context
 

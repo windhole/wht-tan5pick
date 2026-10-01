@@ -1,53 +1,71 @@
+import { parseLogEntry, type LogEntry, type Outcome } from "../log.ts";
 import {
   QUESTION_COUNT,
   buildQuiz,
   clampLimitSec,
   isBetterScore,
+  isSafeProblemFile,
   parseProblems,
-} from "./quiz.js";
+  type Choice,
+  type Question,
+  type Score,
+} from "../quiz.ts";
+
+type ProblemSet = {
+  id: string;
+  title: string;
+  file: string;
+};
+
+type Settings = {
+  setId: string | null;
+  limitSec: number;
+};
 
 const KEYS = {
   settings: "tan5pick.settings.v1",
   scores: "tan5pick.highscores.v1",
-  logs: "tan5pick.logs.v1",
 };
 
-const $ = (id) => document.getElementById(id);
+function $(id: string): HTMLElement {
+  const node = document.getElementById(id);
+  if (!node) throw new Error(`#${id} がありません`);
+  return node;
+}
 
-const cache = new Map();
+const cache = new Map<string, ReturnType<typeof parseProblems>>();
 const state = {
-  sets: [],
+  sets: [] as ProblemSet[],
   starting: false,
   playing: false,
   locked: false,
   presentedAt: 0,
-  set: null,
-  questions: [],
-  session: [],
+  set: null as ProblemSet | null,
+  questions: [] as Question[],
+  session: [] as LogEntry[],
   sessionId: "",
   index: 0,
   limitMs: 1000,
   startedAt: 0,
   raf: 0,
   timerId: 0,
+  logSaveFailed: false,
 };
 
-let logs = readJson(KEYS.logs, []);
-let scores = readJson(KEYS.scores, {});
-if (!Array.isArray(logs)) logs = [];
-if (!scores || typeof scores !== "object" || Array.isArray(scores)) scores = {};
+let logs: LogEntry[] = [];
+let scores = loadScores();
 
-function readJson(key, fallback) {
+function readJson(key: string): unknown {
   try {
     const raw = localStorage.getItem(key);
-    if (!raw) return fallback;
-    return JSON.parse(raw);
+    if (!raw) return null;
+    return JSON.parse(raw) as unknown;
   } catch {
-    return fallback;
+    return null;
   }
 }
 
-function writeJson(key, value) {
+function writeJson(key: string, value: unknown): boolean {
   try {
     localStorage.setItem(key, JSON.stringify(value));
     return true;
@@ -56,32 +74,57 @@ function writeJson(key, value) {
   }
 }
 
-function saveLogs(next) {
-  let batch = next;
-  for (;;) {
-    if (writeJson(KEYS.logs, batch)) return batch;
-    if (batch.length <= 1) return [];
-    batch = batch.slice(Math.ceil(batch.length / 2));
+function loadScores(): Record<string, Score> {
+  const raw = readJson(KEYS.scores);
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  return raw as Record<string, Score>;
+}
+
+async function fetchLogs(): Promise<LogEntry[]> {
+  try {
+    const response = await fetch("/api/logs");
+    if (!response.ok) return [];
+    const data: unknown = await response.json();
+    if (!Array.isArray(data)) return [];
+    return data.flatMap((item) => {
+      const entry = parseLogEntry(item);
+      return entry ? [entry] : [];
+    });
+  } catch {
+    return [];
   }
 }
 
-function show(name) {
+async function postLog(entry: LogEntry): Promise<boolean> {
+  try {
+    const response = await fetch("/api/logs", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(entry),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+function show(name: string): void {
   for (const id of ["open", "play", "result", "log"]) {
     $(`screen-${id}`).hidden = id !== name;
   }
 }
 
-function setMessage(text) {
+function setMessage(text: string): void {
   const el = $("open-message");
   el.hidden = !text;
-  el.textContent = text || "";
+  el.textContent = text;
 }
 
-function formatSec(sec) {
+function formatSec(sec: number): string {
   return `${clampLimitSec(sec).toFixed(1)}秒`;
 }
 
-function formatWhen(iso) {
+function formatWhen(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "";
   return new Intl.DateTimeFormat("ja-JP", {
@@ -93,22 +136,30 @@ function formatWhen(iso) {
   }).format(date);
 }
 
-function currentSet() {
-  return state.sets.find((set) => set.id === $("set-select").value) || null;
+function limitInput(): HTMLInputElement {
+  return $("limit-range") as HTMLInputElement;
 }
 
-function persistSettings() {
-  const settings = {
-    setId: $("set-select").value || null,
-    limitSec: clampLimitSec($("limit-range").value),
+function setSelect(): HTMLSelectElement {
+  return $("set-select") as HTMLSelectElement;
+}
+
+function currentSet(): ProblemSet | null {
+  return state.sets.find((set) => set.id === setSelect().value) ?? null;
+}
+
+function persistSettings(): Settings {
+  const settings: Settings = {
+    setId: setSelect().value || null,
+    limitSec: clampLimitSec(limitInput().value),
   };
-  $("limit-range").value = String(settings.limitSec);
+  limitInput().value = String(settings.limitSec);
   $("limit-output").textContent = formatSec(settings.limitSec);
   writeJson(KEYS.settings, settings);
   return settings;
 }
 
-function renderHighScore() {
+function renderHighScore(): void {
   const set = currentSet();
   const score = set ? scores[set.id] : null;
   if (!set) {
@@ -125,31 +176,29 @@ function renderHighScore() {
   $("highscore-meta").textContent = `${set.title}・制限 ${formatSec(score.limitMs / 1000)} の記録`;
 }
 
-function updateLogButton() {
+function updateLogButton(): void {
   $("log-btn").textContent = logs.length ? `回答ログ（${logs.length}件）` : "回答ログ";
 }
 
-function syncStartEnabled() {
-  $("start-btn").disabled = state.starting || state.sets.length === 0;
+function syncStartEnabled(): void {
+  ($("start-btn") as HTMLButtonElement).disabled = state.starting || state.sets.length === 0;
 }
 
-function isSafeFile(file) {
-  return typeof file === "string" && /^[^/\\]+\.txt$/.test(file) && !file.includes("..");
+function isProblemSet(value: unknown): value is ProblemSet {
+  if (!value || typeof value !== "object") return false;
+  const item = value as Record<string, unknown>;
+  return (
+    typeof item.id === "string" &&
+    typeof item.title === "string" &&
+    typeof item.file === "string" &&
+    item.id.length > 0 &&
+    item.title.length > 0 &&
+    isSafeProblemFile(item.file)
+  );
 }
 
-function normalizeSets(data) {
-  if (!Array.isArray(data)) throw new Error("問題セット一覧の形式が不正です");
-  const sets = [];
-  for (const item of data) {
-    if (!item || typeof item.id !== "string" || typeof item.title !== "string") continue;
-    if (!item.id || !item.title || !isSafeFile(item.file)) continue;
-    sets.push({ id: item.id, title: item.title, file: item.file });
-  }
-  return sets;
-}
-
-function fillSelect(preferredId) {
-  const select = $("set-select");
+function fillSelect(preferredId: string | null): void {
+  const select = setSelect();
   select.replaceChildren();
   for (const set of state.sets) {
     const option = document.createElement("option");
@@ -157,12 +206,13 @@ function fillSelect(preferredId) {
     option.textContent = set.title;
     select.append(option);
   }
-  if (state.sets.some((set) => set.id === preferredId)) select.value = preferredId;
+  if (preferredId && state.sets.some((set) => set.id === preferredId)) select.value = preferredId;
 }
 
-async function loadRecords(set) {
-  if (cache.has(set.file)) return cache.get(set.file);
-  const response = await fetch(`data/${encodeURIComponent(set.file)}`);
+async function loadRecords(set: ProblemSet) {
+  const cached = cache.get(set.file);
+  if (cached) return cached;
+  const response = await fetch(`/api/sets/${encodeURIComponent(set.file)}`);
   if (!response.ok) throw new Error(`問題ファイルを読めません（${set.file}）`);
   const records = parseProblems(await response.text());
   if (records.length === 0) throw new Error("問題ファイルに有効なレコードがありません");
@@ -170,29 +220,33 @@ async function loadRecords(set) {
   return records;
 }
 
-function newId() {
+function newId(): string {
   if (globalThis.crypto?.randomUUID) return crypto.randomUUID();
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function stopClock() {
+function stopClock(): void {
   if (state.raf) cancelAnimationFrame(state.raf);
   if (state.timerId) clearTimeout(state.timerId);
   state.raf = 0;
   state.timerId = 0;
 }
 
-function elapsedMs() {
+function elapsedMs(): number {
   return Math.min(state.limitMs, Math.max(0, Math.round(performance.now() - state.startedAt)));
 }
 
-function presentQuestion() {
+function presentQuestion(): void {
   const question = state.questions[state.index];
-  $("progress").textContent = `${state.set.title} · ${state.index + 1} / ${QUESTION_COUNT}`;
+  const set = state.set;
+  if (!question || !set) return;
+  $("progress").textContent = `${set.title} · ${state.index + 1} / ${QUESTION_COUNT}`;
   $("term").textContent = question.term;
   $("live").textContent = `第${state.index + 1}問。${question.term}`;
   for (let i = 0; i < 2; i += 1) {
-    $(`choice-${i}`).querySelector("span").textContent = question.choices[i].text;
+    const span = $(`choice-${i}`).querySelector("span");
+    const choice = question.choices[i];
+    if (span && choice) span.textContent = choice.text;
   }
   $("timer-bar").style.transform = "scaleX(1)";
   $("timer-label").textContent = `残り ${(state.limitMs / 1000).toFixed(1)}秒`;
@@ -200,11 +254,11 @@ function presentQuestion() {
   startTimer();
 }
 
-function startTimer() {
+function startTimer(): void {
   stopClock();
   state.startedAt = performance.now();
   const deadline = state.startedAt + state.limitMs;
-  const tick = (now) => {
+  const tick = (now: number) => {
     if (!state.playing || state.locked) return;
     const remaining = Math.max(0, deadline - now);
     $("timer-bar").style.transform = `scaleX(${remaining / state.limitMs})`;
@@ -216,27 +270,31 @@ function startTimer() {
     state.raf = requestAnimationFrame(tick);
   };
   state.raf = requestAnimationFrame(tick);
-  state.timerId = setTimeout(onTimeout, state.limitMs);
+  state.timerId = window.setTimeout(onTimeout, state.limitMs);
 }
 
-function finishQuestion(outcome, selected, elapsed) {
+async function finishQuestion(outcome: Outcome, selected: string | null, elapsed: number): Promise<void> {
   const question = state.questions[state.index];
-  const entry = {
+  const set = state.set;
+  if (!question || !set) return;
+  const entry: LogEntry = {
     sessionId: state.sessionId,
     at: new Date().toISOString(),
-    setId: state.set.id,
-    setTitle: state.set.title,
+    setId: set.id,
+    setTitle: set.title,
     index: state.index + 1,
     term: question.term,
     correctExplanation: question.correctExplanation,
-    choices: question.choices.map((choice) => choice.text),
+    choices: question.choices.map((choice: Choice) => choice.text),
     selected,
     outcome,
     limitMs: state.limitMs,
     elapsedMs: elapsed,
   };
   state.session.push(entry);
-  logs = saveLogs(logs.concat(entry));
+  const saved = await postLog(entry);
+  if (saved) logs = logs.concat(entry);
+  else state.logSaveFailed = true;
   updateLogButton();
 
   if (state.index + 1 >= QUESTION_COUNT) {
@@ -250,9 +308,9 @@ function finishQuestion(outcome, selected, elapsed) {
   presentQuestion();
 }
 
-function onChoice(index, event) {
+function onChoice(index: number, event?: Event): void {
   if (!state.playing || state.locked) return;
-  if (event?.repeat) return;
+  if (event && "repeat" in event && event.repeat) return;
   if (event && event.timeStamp < state.presentedAt) return;
   const choice = state.questions[state.index]?.choices[index];
   if (!choice) return;
@@ -262,25 +320,25 @@ function onChoice(index, event) {
   finishQuestion(choice.correct ? "correct" : "incorrect", choice.text, elapsed);
 }
 
-function onTimeout() {
+function onTimeout(): void {
   if (!state.playing || state.locked) return;
   state.locked = true;
   stopClock();
   finishQuestion("timeout", null, state.limitMs);
 }
 
-function outcomeMark(outcome) {
+function outcomeMark(outcome: Outcome): { text: string; className: string } {
   if (outcome === "correct") return { text: "○", className: "mark mark-ok" };
   return { text: "×", className: "mark mark-ng" };
 }
 
-function outcomeWord(outcome) {
+function outcomeWord(outcome: Outcome): string {
   if (outcome === "correct") return "正解";
   if (outcome === "timeout") return "時間切れ";
   return "不正解";
 }
 
-function renderEntry(entry) {
+function renderEntry(entry: LogEntry): HTMLLIElement {
   const item = document.createElement("li");
   item.className = "result-item";
 
@@ -314,18 +372,20 @@ function renderEntry(entry) {
   return item;
 }
 
-function showResults() {
+function showResults(): void {
+  const set = state.set;
+  if (!set) return;
   const correct = state.session.filter((entry) => entry.outcome === "correct").length;
-  const nextScore = {
+  const nextScore: Score = {
     correct,
     limitMs: state.limitMs,
     at: new Date().toISOString(),
   };
-  const prev = scores[state.set.id];
+  const prev = scores[set.id] ?? null;
   const updated = isBetterScore(nextScore, prev);
   let saved = true;
   if (updated) {
-    scores[state.set.id] = nextScore;
+    scores[set.id] = nextScore;
     saved = writeJson(KEYS.scores, scores);
   }
 
@@ -334,8 +394,16 @@ function showResults() {
     $("result-note").textContent = "ハイスコアを更新しました";
   } else if (updated) {
     $("result-note").textContent = "ハイスコアを更新しました（このブラウザには保存できませんでした）";
-  } else {
+  } else if (prev) {
     $("result-note").textContent = `ハイスコアは ${prev.correct} / ${QUESTION_COUNT} です`;
+  } else {
+    $("result-note").textContent = "";
+  }
+  if (state.logSaveFailed) {
+    const note = $("result-note");
+    note.textContent = note.textContent
+      ? `${note.textContent}。ログファイルに書けませんでした`
+      : "ログファイルに書けませんでした";
   }
 
   const list = $("result-list");
@@ -345,28 +413,29 @@ function showResults() {
   renderHighScore();
 }
 
-function groupSessions(entries) {
-  const sessions = [];
-  const index = new Map();
+function groupSessions(entries: LogEntry[]): LogEntry[][] {
+  const sessions: LogEntry[][] = [];
+  const index = new Map<string, LogEntry[]>();
   for (const entry of entries) {
     const id = entry.sessionId || `${entry.at}-${entry.setId}`;
-    if (!index.has(id)) {
-      const session = [];
+    let session = index.get(id);
+    if (!session) {
+      session = [];
       index.set(id, session);
       sessions.push(session);
     }
-    index.get(id).push(entry);
+    session.push(entry);
   }
   return sessions;
 }
 
-function renderLogs() {
+function renderLogs(): void {
   const root = $("log-list");
   root.replaceChildren();
   if (!logs.length) {
     const empty = document.createElement("p");
     empty.className = "meta";
-    empty.textContent = "まだ記録がありません。1ゲームが終わると、各問の回答と正誤がここに残ります。";
+    empty.textContent = "まだ記録がありません。回答すると data/log.jsonl に残ります。";
     root.append(empty);
     return;
   }
@@ -374,9 +443,10 @@ function renderLogs() {
   const sessions = groupSessions(logs);
   const hiddenCount = Math.max(0, sessions.length - 30);
   for (const session of sessions.slice(-30).reverse()) {
+    const first = session[0];
+    if (!first) continue;
     const article = document.createElement("article");
     article.className = "session";
-    const first = session[0];
     const correct = session.filter((entry) => entry.outcome === "correct").length;
     const heading = document.createElement("h3");
     heading.textContent = `${formatWhen(first.at)}　${first.setTitle}　正解 ${correct} / ${session.length}`;
@@ -394,7 +464,7 @@ function renderLogs() {
   }
 }
 
-async function startGame() {
+async function startGame(): Promise<void> {
   if (state.starting) return;
   const set = currentSet();
   if (!set) {
@@ -416,6 +486,7 @@ async function startGame() {
     state.limitMs = Math.round(settings.limitSec * 1000);
     state.playing = true;
     state.locked = false;
+    state.logSaveFailed = false;
     show("play");
     presentQuestion();
   } catch (error) {
@@ -429,7 +500,7 @@ async function startGame() {
   }
 }
 
-function onKey(event) {
+function onKey(event: KeyboardEvent): void {
   if (!state.playing) return;
   const tag = document.activeElement?.tagName;
   if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
@@ -437,17 +508,19 @@ function onKey(event) {
   if (event.key === "2") onChoice(1, event);
 }
 
-function bind() {
-  $("set-select").addEventListener("change", () => {
+function bind(): void {
+  setSelect().addEventListener("change", () => {
     persistSettings();
     renderHighScore();
   });
-  $("limit-range").addEventListener("input", persistSettings);
+  limitInput().addEventListener("input", () => {
+    persistSettings();
+  });
   $("start-btn").addEventListener("click", () => {
-    startGame();
+    void startGame();
   });
   $("retry-btn").addEventListener("click", () => {
-    startGame();
+    void startGame();
   });
   $("home-btn").addEventListener("click", () => {
     show("open");
@@ -455,8 +528,12 @@ function bind() {
     updateLogButton();
   });
   $("log-btn").addEventListener("click", () => {
-    renderLogs();
-    show("log");
+    void (async () => {
+      logs = await fetchLogs();
+      updateLogButton();
+      renderLogs();
+      show("log");
+    })();
   });
   $("log-home-btn").addEventListener("click", () => show("open"));
   for (const index of [0, 1]) {
@@ -473,19 +550,22 @@ function bind() {
   document.addEventListener("keydown", onKey);
 }
 
-async function init() {
+async function init(): Promise<void> {
   bind();
-  const settings = readJson(KEYS.settings, { setId: null, limitSec: 1 });
-  const limitSec = clampLimitSec(settings?.limitSec ?? 1);
-  $("limit-range").value = String(limitSec);
+  const saved = readJson(KEYS.settings) as Partial<Settings> | null;
+  const limitSec = clampLimitSec(saved?.limitSec ?? 1);
+  limitInput().value = String(limitSec);
   $("limit-output").textContent = formatSec(limitSec);
+  logs = await fetchLogs();
   updateLogButton();
   try {
-    const response = await fetch("data/sets.json");
+    const response = await fetch("/api/sets");
     if (!response.ok) throw new Error("問題セット一覧を読めません");
-    state.sets = normalizeSets(await response.json());
+    const data: unknown = await response.json();
+    if (!Array.isArray(data)) throw new Error("問題セット一覧の形式が不正です");
+    state.sets = data.filter(isProblemSet);
     if (!state.sets.length) throw new Error("問題セットがありません");
-    fillSelect(settings?.setId);
+    fillSelect(typeof saved?.setId === "string" ? saved.setId : null);
     persistSettings();
     setMessage("");
   } catch (error) {
@@ -496,4 +576,4 @@ async function init() {
   show("open");
 }
 
-init();
+void init();
